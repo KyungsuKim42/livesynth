@@ -28,6 +28,9 @@ live = ["sounddevice>=0.4.6", "mido>=1.3", "python-rtmidi>=1.5", "PyQt6>=6.5"]
 mlx = ["mlx>=0.18"]
 dev = ["pytest>=7"]
 
+[project.scripts]
+livesynth-live = "livesynth.live.gui:main"
+
 [project.urls]
 Repository = "https://github.com/KyungsuKim42/livesynth"
 

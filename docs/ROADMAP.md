@@ -21,12 +21,16 @@
   with `LIVESYNTH_WEIGHTS`. First load downloads about 400 MB; later loads
   read the Hugging Face cache (about 5 s on a GPU server).
 
-## Phase 3 — Real-time instrument (Python)
+## Phase 3 — Real-time instrument (Python) (in progress)
 
 * Streaming engine: backbone `step` with a ring-buffer KV cache + streaming
   decoder, one 480-sample block per 10 ms.
   * CUDA path: static shapes + CUDA graphs.
-  * Apple Silicon path: MLX engine with int8 weights.
+  * Apple Silicon path: MLX engine, bf16 by default (int8 optional).
+  * Done: `stream.StreamingEngine` (2.7 ms/frame bf16 on an RTX 4090),
+    `mlx_engine.MLXStreamingEngine` (matches PyTorch to 102 dB in fp32),
+    `live.host.SynthHost`, `live.gui` (`livesynth-live`), `live.bench`.
+  * To do: measure bf16 single-stream on the M3 MacBook Air; GUI test on macOS.
 * GUI (`livesynth-live`): MIDI device input (mido / python-rtmidi) and
   computer-keyboard input, preset browser, drag-and-drop reference audio, text
   prompt, A/B morph slider, "keep playing" (continuation) toggle, level meter,

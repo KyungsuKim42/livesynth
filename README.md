@@ -69,6 +69,36 @@ array of shape `[K, 4]` with rows `(start_s, end_s, pitch, velocity)`. Timbre
 inputs can be an embedding, a preset name, or the path of a reference recording.
 All outputs are mono `float32` arrays at 48 kHz.
 
+## Real-time instrument
+
+```bash
+pip install "livesynth[live,mlx] @ git+https://github.com/KyungsuKim42/livesynth.git"   # Apple Silicon
+pip install "livesynth[live] @ git+https://github.com/KyungsuKim42/livesynth.git"       # CUDA GPU
+livesynth-live
+```
+
+Play with a MIDI keyboard (or the virtual port *LiveSynth In*) or with the
+computer keyboard: `A W S E D F T G Y H U J K` play one octave, `Z`/`X` shift
+the octave, `C`/`V` change the velocity, `Space` releases everything. The
+window has two timbre slots (preset, reference recording by drag and drop, or
+a text prompt) and a morph slider between them. With *Keep playing when I
+stop*, the model continues the performance on its own once every key has been
+released for the chosen grace time; *Autonomous* lets it improvise.
+
+On Apple Silicon the engine runs on MLX in bfloat16; on NVIDIA GPUs it runs in
+PyTorch with a CUDA graph (about 3 ms per 10-ms frame on an RTX 4090). Check
+your machine with
+
+```bash
+python -m livesynth.live.bench              # mean must stay well below 10 ms
+python -m livesynth.live.bench --quant 8    # MLX weight-only int8, if bf16 is too slow
+```
+
+For your own real-time code, `synth.streaming_engine()` (PyTorch) and
+`livesynth.mlx_engine.MLXStreamingEngine` (MLX) expose the same
+`step(state, age, absent) -> 480 samples` interface; feed them from
+`livesynth.NoteTracker`.
+
 ## How it works
 
 * **Causal VAE codec.** Audio is represented as 128-dimensional continuous
@@ -88,7 +118,7 @@ All outputs are mono `float32` arrays at 48 kHz.
 
 - [x] Offline inference API (rendering, batching, morphing, continuation)
 - [x] Automatic weight download from the Hugging Face Hub
-- [ ] Real-time GUI with MIDI controller and computer-keyboard input
+- [x] Real-time GUI with MIDI controller and computer-keyboard input (testing on macOS)
 - [ ] VST3 / AU plug-in and standalone app
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for details.
