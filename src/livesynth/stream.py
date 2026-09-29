@@ -55,7 +55,8 @@ class StreamingEngine:
             absent frames from the attention window. Without this the model keeps
             improvising on top of the resumed performance for up to one window
             (5 s): on 53 held-out instruments it doubled the number of notes and
-            cut note F1 after resuming from 0.188 to 0.126; with it F1 is 0.199.
+            cut note F1 after resuming from 0.188 to 0.126; with it F1 is 0.199,
+            and the audio matches a quiet rest again ~0.1 s after resuming.
     """
 
     def __init__(self, backbone: LiveSynthBackbone, decoder: LatentDecoder,

@@ -96,7 +96,7 @@ class SynthHost:
         self._morph = 0.0
         self.keep_playing = True
         self.autonomous = False
-        self.grace_s = 0.3
+        self.grace_s = 1.0          # rests shorter than this never trigger autonomy
         self._idle_frames = 0
         self._has_played = False
         self._reset_req = False
