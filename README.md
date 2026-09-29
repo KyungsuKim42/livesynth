@@ -19,7 +19,15 @@ performer stops.
 pip install git+https://github.com/KyungsuKim42/livesynth.git
 ```
 
-Python 3.10 or newer and PyTorch 2.1 or newer are required. A CUDA GPU is
+Python 3.10, 3.11 or 3.12 is required (the CLAP timbre encoder depends on
+NumPy 1.x, which has no Python 3.13 builds), together with PyTorch 2.1 or newer.
+On macOS, for example:
+
+```bash
+brew install python@3.12            # or: conda create -n livesynth python=3.12
+python3.12 -m venv .venv && source .venv/bin/activate
+```
+ A CUDA GPU is
 recommended for fast offline rendering; Apple Silicon (MPS) and CPU also work.
 The model weights (about 400 MB) and the CLAP timbre encoder are downloaded
 from the Hugging Face Hub the first time the model is loaded.

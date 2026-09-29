@@ -11,9 +11,10 @@ license = { text = "MIT" }
 authors = [
     { name = "Kyungsu Kim" }, { name = "Yejin Kim" }, { name = "Kyogu Lee" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"   # laion_clap needs numpy<2 (no wheels for 3.13)
 dependencies = [
     "torch>=2.1",
+    "torchvision",          # imported by laion_clap but not declared by it
     "numpy>=1.24",
     "scipy>=1.10",
     "soundfile>=0.12",
