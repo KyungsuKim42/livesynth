@@ -69,7 +69,7 @@ python quickstart.py song.mid [reference.wav]
 | `render_timbre_path(midi, path)` | Render with an arbitrary per-frame timbre path (`[N, 512]` tensor or a function of time). |
 | `continue_performance(midi, timbre, prefix, length)` | Play the MIDI up to `prefix` seconds, then continue autonomously for `length` seconds. With `midi=None` the model improvises. |
 | `embed_audio(path_or_array, sr)` | CLAP embedding of a reference recording (the loudest 10 s are used). |
-| `embed_text(prompt, align)` | CLAP text embedding mapped onto the audio region (`"procrustes"`, `"translation"` or `"none"`). |
+| `embed_text(prompt, align)` | CLAP text embedding mapped onto the audio region with an orthogonal Procrustes rotation (`align="procrustes"`, default) or left raw (`align="none"`). |
 | `generate(midi_state, midi_age, timbre, midi_absent)` | Low-level batched generation on frame-level conditions. |
 
 MIDI inputs can be a file path, a `pretty_midi.PrettyMIDI` object, or a note
@@ -89,7 +89,8 @@ Play with a MIDI keyboard (or the virtual port *LiveSynth In*) or with the
 computer keyboard: `A W S E D F T G Y H U J K` play one octave, `Z`/`X` shift
 the octave, `C`/`V` change the velocity, `Space` releases everything. The
 window has two timbre slots (preset, reference recording by drag and drop, or
-a text prompt) and a morph slider between them. With *Keep playing when I
+a text prompt with a choice of Procrustes alignment or none) and a morph
+slider between them. With *Keep playing when I
 stop*, the model continues the performance on its own once every key has been
 released for the chosen grace time; *Autonomous* lets it improvise.
 

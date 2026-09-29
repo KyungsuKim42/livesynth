@@ -104,8 +104,8 @@ class TimbreEncoder:
     def embed_text(self, prompt: str, align: str = "procrustes") -> torch.Tensor:
         """Text prompt -> unit-norm embedding [512] mapped toward the audio region.
 
-        ``align``: ``"procrustes"`` (orthogonal rotation, best prompt adherence),
-        ``"translation"`` (mean shift), or ``"none"`` (raw CLAP text embedding).
+        ``align``: ``"procrustes"`` (orthogonal rotation fitted on NSynth
+        prompt/audio pairs, default) or ``"none"`` (the raw CLAP text embedding).
         """
         e = self.clap.get_text_embedding([prompt], use_tensor=True).float()
         e = F.normalize(e, dim=-1)[0]
@@ -113,7 +113,4 @@ class TimbreEncoder:
             return e
         if align == "procrustes":
             return F.normalize(e @ self.text_align["rotation"], dim=-1)
-        if align == "translation":
-            ta = self.text_align
-            return F.normalize(e - ta["mu_text"] + ta["mu_audio"], dim=-1)
-        raise ValueError(f"unknown align mode {align!r}")
+        raise ValueError(f"unknown align mode {align!r}; use 'procrustes' or 'none'")

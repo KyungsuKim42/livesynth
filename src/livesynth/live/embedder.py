@@ -43,12 +43,12 @@ def _worker(model_dir: str | None, jobs, results) -> None:
         job = jobs.get()
         if job is None:
             return
-        job_id, slot, kind, payload, label = job
+        job_id, slot, kind, payload, label, align = job
         try:
             if kind == "audio":
                 e = enc.embed_audio(payload)
             else:
-                e = enc.embed_text(payload, align="procrustes")
+                e = enc.embed_text(payload, align=align)
             results.put(("ok", EmbedResult(job_id, slot, label, e.cpu().numpy().astype(np.float32))))
         except Exception as exc:                              # noqa: BLE001
             results.put(("ok", EmbedResult(job_id, slot, label, None, f"{type(exc).__name__}: {exc}")))
@@ -70,12 +70,15 @@ class EmbedderProcess:
 
     def submit_audio(self, slot: int, path: str, label: str) -> int:
         i = next(self._ids)
-        self._jobs.put((i, slot, "audio", path, label))
+        self._jobs.put((i, slot, "audio", path, label, None))
         return i
 
-    def submit_text(self, slot: int, prompt: str) -> int:
+    def submit_text(self, slot: int, prompt: str, align: str = "procrustes") -> int:
+        """``align``: ``"procrustes"`` or ``"none"``
+        (see :meth:`livesynth.timbre.TimbreEncoder.embed_text`)."""
         i = next(self._ids)
-        self._jobs.put((i, slot, "text", prompt, f'"{prompt}"'))
+        suffix = "" if align == "procrustes" else f" [{align}]"
+        self._jobs.put((i, slot, "text", prompt, f'"{prompt}"{suffix}', align))
         return i
 
     def poll(self) -> list[EmbedResult]:

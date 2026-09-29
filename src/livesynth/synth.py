@@ -146,8 +146,8 @@ class LiveSynth:
         """Text prompt (e.g. ``"the sound of an acoustic string"``) -> timbre embedding [512].
 
         ``align`` maps the CLAP text embedding toward the audio embeddings the
-        model was trained on: ``"procrustes"`` (default), ``"translation"`` or
-        ``"none"``. Text prompts reliably select the instrument family; the
+        model was trained on: ``"procrustes"`` (default) or ``"none"`` (raw
+        CLAP text embedding). Text prompts reliably select the instrument family; the
         finer timbre is better specified with a reference recording."""
         return self._encoder().embed_text(prompt, align=align)
 

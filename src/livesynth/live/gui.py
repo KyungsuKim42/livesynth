@@ -137,9 +137,20 @@ class TimbreSlot(QFrame):
         self.prompt = QLineEdit()
         self.prompt.setPlaceholderText("or describe it: the sound of an acoustic string")
         self.prompt.returnPressed.connect(self._on_prompt)
+        # How the CLAP text embedding is mapped onto the audio embeddings the
+        # model was trained on (the modality gap): an orthogonal Procrustes
+        # rotation, or the raw text embedding.
+        self.align = QComboBox()
+        self.align.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        for label, key in (("Procrustes", "procrustes"), ("No alignment", "none")):
+            self.align.addItem(label, key)
+        self.align.setToolTip("Text-to-audio alignment of the CLAP embedding")
+        self.align.activated.connect(self._on_align)
+        self._last_prompt: str | None = None
         lay.addWidget(self.preset, 1, 0, 1, 2)
         lay.addWidget(audio_btn, 1, 2)
         lay.addWidget(self.prompt, 2, 0, 1, 3)
+        lay.addWidget(self.align, 2, 3)
         hint = QLabel("drop an audio file here")
         hint.setObjectName("muted")
         lay.addWidget(hint, 1, 3)
@@ -152,7 +163,7 @@ class TimbreSlot(QFrame):
     def _on_preset(self, idx: int) -> None:
         if idx > 0:
             name = self.preset.itemText(idx)
-            self.win.apply_embedding(self.slot, self.win.host.presets[name], name)
+            self.win.apply_embedding(self.slot, self.win.host.presets[name], name, "preset")
 
     def _pick_audio(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Reference recording", str(Path.home()),
@@ -163,8 +174,14 @@ class TimbreSlot(QFrame):
     def _on_prompt(self) -> None:
         text = self.prompt.text().strip()
         if text:
-            self.win.embed_text(self.slot, text)
+            self._last_prompt = text
+            self.win.embed_text(self.slot, text, self.align.currentData())
         self.win.setFocus()
+
+    def _on_align(self, _idx: int) -> None:
+        # Re-embed the current prompt with the new alignment, if this slot holds one.
+        if self._last_prompt is not None and self.win.slot_source[self.slot] == "text":
+            self.win.embed_text(self.slot, self._last_prompt, self.align.currentData())
 
     def dragEnterEvent(self, ev) -> None:                     # noqa: N802
         urls = ev.mimeData().urls()
@@ -189,6 +206,8 @@ class MainWindow(QMainWindow):
         self._held_lock = threading.Lock()
         self.midi_in = None
         self._booted = False
+        self.slot_source = ["", ""]              # "preset" | "audio" | "text" per slot
+        self._pending: dict[int, str] = {}       # embedder job id -> source kind
 
         root = QWidget()
         v = QVBoxLayout(root)
@@ -389,19 +408,21 @@ class MainWindow(QMainWindow):
 
     # -- timbre -----------------------------------------------------------------
 
-    def apply_embedding(self, slot: int, emb, label: str) -> None:
+    def apply_embedding(self, slot: int, emb, label: str, source: str) -> None:
         self.host.set_slot(slot, emb)
+        self.slot_source[slot] = source
         self.slots[slot].name.setText(label)
         if slot == 0 and self.slots[1].name.text() == "—":
             self.slots[1].name.setText(label)
+            self.slot_source[1] = source
 
     def embed_audio(self, slot: int, path: str) -> None:
         self.slots[slot].name.setText(f"embedding {Path(path).name}…")
-        self.embedder.submit_audio(slot, path, Path(path).stem)
+        self._pending[self.embedder.submit_audio(slot, path, Path(path).stem)] = "audio"
 
-    def embed_text(self, slot: int, prompt: str) -> None:
+    def embed_text(self, slot: int, prompt: str, align: str = "procrustes") -> None:
         self.slots[slot].name.setText(f'embedding "{prompt}"…')
-        self.embedder.submit_text(slot, prompt)
+        self._pending[self.embedder.submit_text(slot, prompt, align)] = "text"
 
     # -- periodic -----------------------------------------------------------------
 
@@ -410,7 +431,7 @@ class MainWindow(QMainWindow):
         for s in self.slots:
             s.fill_presets(names)
         if names:
-            self.apply_embedding(0, self.host.presets[names[0]], names[0])
+            self.apply_embedding(0, self.host.presets[names[0]], names[0], "preset")
 
     def _tick(self) -> None:
         if not self._booted:
@@ -424,7 +445,7 @@ class MainWindow(QMainWindow):
             if r.embedding is None:
                 self.slots[r.slot].name.setText(f"failed: {r.error}")
             else:
-                self.apply_embedding(r.slot, r.embedding, r.label)
+                self.apply_embedding(r.slot, r.embedding, r.label, self._pending.pop(r.job_id, "audio"))
         st = self.host.stats()
         if st.frames:
             mode = "continuing" if st.absent else "playing"
