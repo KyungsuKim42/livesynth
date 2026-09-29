@@ -136,6 +136,7 @@ def test_streaming_engine_matches_offline():
     g = torch.nn.functional.normalize(timbre[:, 0], dim=-1)   # the engine normalises timbre
     with torch.no_grad():
         ref = dec(m(noise, state, g, absent, age))[0]
+    eng.forget_on_resume = False           # the offline pass keeps every frame in context
     eng.set_timbre(g[0])
     out = torch.cat([eng.step_tensor(state[0, t], age[0, t], bool(absent[0, t]),
                                      noise=noise[0, t]).reshape(-1).clone() for t in range(40)])
@@ -155,3 +156,29 @@ def test_streaming_engine_rope_rebase():
     a = [eng.step_tensor(state[0, t], age[0, t], False, noise=noise[0, t]).clone() for t in range(120)]
     b = [eng_long.step_tensor(state[0, t], age[0, t], False, noise=noise[0, t]).clone() for t in range(120)]
     assert torch.allclose(torch.cat(a, -1), torch.cat(b, -1), atol=1e-4)
+
+
+@pytest.mark.parametrize("forget", [True, False])
+def test_forget_on_resume(forget):
+    """With forget_on_resume the frames after the performer resumes do not depend
+    on anything that happened during the absent interlude (here: its noise)."""
+    torch.manual_seed(2)
+    m, dec, eng = _engine_pair(window=16)
+    eng.forget_on_resume = forget
+    noise, state, age, _, timbre = random_inputs(1, 60, m.cfg)
+    absent = torch.zeros(60, dtype=torch.bool)
+    absent[10:25] = True                                   # interlude, resume at frame 25
+    outs = []
+    for variant in range(2):
+        nz = noise[0].clone()
+        if variant:
+            nz[10:25] = torch.randn(15, m.cfg.noise_dim)   # different interlude
+        eng.set_timbre(timbre[0, 0])
+        eng.reset()
+        outs.append(torch.stack([eng.step_tensor(state[0, t], age[0, t], bool(absent[t]),
+                                                 noise=nz[t]).reshape(-1).clone()
+                                 for t in range(60)]))
+    before = torch.allclose(outs[0][:10], outs[1][:10], atol=1e-6)
+    after = torch.allclose(outs[0][45:], outs[1][45:], atol=1e-5)   # past the decoder's receptive field
+    assert before
+    assert after == forget

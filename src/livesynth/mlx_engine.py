@@ -51,7 +51,10 @@ class MLXStreamingEngine:
     _QUANT_SUFFIXES = (".qkv", ".out", ".w12", ".w3", ".adaln", ".pw1", ".pw2")
 
     def __init__(self, model_dir: str | os.PathLike, dtype=mx.bfloat16,
-                 use_compile: bool = True, max_pos: int = 65536, seed: int | None = None) -> None:
+                 use_compile: bool = True, max_pos: int = 65536, seed: int | None = None,
+                 forget_on_resume: bool = True) -> None:
+        """``forget_on_resume``: see :class:`livesynth.stream.StreamingEngine`."""
+        self.forget_on_resume = forget_on_resume
         d = Path(model_dir)
         cfg = json.loads((d / "config.json").read_text())
         bc, dc = cfg["backbone"], cfg["decoder"]
@@ -199,6 +202,8 @@ class MLXStreamingEngine:
                     for _ in range(self.dec_depth)]
         self.ola = mx.zeros((self.n_fft,), dtype=mx.float32)
         self.bias = np.full((1, 1, 1, self.window), -np.inf, np.float32)
+        self._slot_absent = np.zeros(self.window, bool)
+        self._prev_absent = False
         self._frame = 0
         if seed is not None:
             self._rng = np.random.default_rng(seed)
@@ -297,8 +302,12 @@ class MLXStreamingEngine:
             self._frame -= dlt
         pos = self._frame
         slot = pos % self.window
-        if pos < self.window:
-            self.bias[..., slot] = 0.0
+        absent = bool(absent)
+        if self.forget_on_resume and self._prev_absent and not absent:
+            self.bias[0, 0, 0, self._slot_absent] = -np.inf     # forget the interlude
+        self.bias[..., slot] = 0.0                              # this slot holds the current frame
+        self._slot_absent[slot] = absent
+        self._prev_absent = absent
         st = np.asarray(state, np.int64).reshape(-1)
         sus = (st >= SUSTAIN_BASE) & (st < SUSTAIN_BASE + N_VEL)
         a = np.minimum(np.asarray(age, np.int64).reshape(-1) * sus, MAX_NOTE_AGE).astype(np.float32)

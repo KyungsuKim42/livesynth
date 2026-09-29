@@ -50,12 +50,20 @@ class StreamingEngine:
         max_pos: RoPE table length; the cache is re-based before it is reached,
             so sessions can run indefinitely.
         seed: noise seed (``None`` for random).
+        forget_on_resume: when the MIDI condition returns after absent frames
+            (the performer resumes after the model played on its own), remove the
+            absent frames from the attention window. Without this the model keeps
+            improvising on top of the resumed performance for up to one window
+            (5 s): on 53 held-out instruments it doubled the number of notes and
+            cut note F1 after resuming from 0.188 to 0.126; with it F1 is 0.199.
     """
 
     def __init__(self, backbone: LiveSynthBackbone, decoder: LatentDecoder,
                  device: torch.device, precision: str = "bf16", use_graph: bool = True,
-                 max_pos: int = 65536, seed: int | None = None) -> None:
+                 max_pos: int = 65536, seed: int | None = None,
+                 forget_on_resume: bool = True) -> None:
         self.device = torch.device(device)
+        self.forget_on_resume = forget_on_resume
         self.precision = precision
         self.use_graph = bool(use_graph and self.device.type == "cuda")
         self.bb = copy.deepcopy(backbone).to(self.device).eval()
@@ -89,6 +97,9 @@ class StreamingEngine:
         self.sin_buf = torch.zeros(1, dh // 2, device=d)
         self.slot_buf = torch.zeros(1, dtype=torch.long, device=d)
         self.bias_buf = torch.full((self.window,), float("-inf"), device=d)
+        self._visible = np.zeros(self.window, bool)        # host mirror of bias_buf == 0
+        self._slot_absent = np.zeros(self.window, bool)    # slot holds an absent frame
+        self._prev_absent = False
         v_dtype = torch.bfloat16 if precision == "bf16" else torch.float32
         self.k_ring = [torch.zeros(1, n_heads, self.window, dh, device=d) for _ in self.bb.blocks]
         self.v_ring = [torch.zeros(1, n_heads, self.window, dh, dtype=v_dtype, device=d)
@@ -121,6 +132,9 @@ class StreamingEngine:
             kr.zero_()
             vr.zero_()
         self.bias_buf.fill_(float("-inf"))
+        self._visible[:] = False
+        self._slot_absent[:] = False
+        self._prev_absent = False
         for c in self.ctx:
             c.zero_()
         self.ola.zero_()
@@ -217,7 +231,7 @@ class StreamingEngine:
         slot = pos % self.window
         self.midi_buf.copy_(state.reshape(1, 1, -1))
         self.age_buf.copy_(age.reshape(1, 1, -1))
-        self.absent_buf.fill_(bool(absent))
+        self.absent_buf.fill_(absent)
         if noise is None:
             torch.randn(self.noise_buf.shape, generator=self._gen, device=self.device,
                         out=self.noise_buf)
@@ -226,8 +240,17 @@ class StreamingEngine:
         self.cos_buf.copy_(self._rope_cos[pos:pos + 1])
         self.sin_buf.copy_(self._rope_sin[pos:pos + 1])
         self.slot_buf.fill_(slot)
-        if pos < self.window:
+        absent = bool(absent)
+        if self.forget_on_resume and self._prev_absent and not absent:
+            hide = np.where(self._visible & self._slot_absent)[0]
+            if len(hide):
+                self.bias_buf[torch.from_numpy(hide).to(self.device)] = float("-inf")
+                self._visible[hide] = False
+        if not self._visible[slot]:                       # this slot now holds the current frame
             self.bias_buf[slot] = 0.0
+            self._visible[slot] = True
+        self._slot_absent[slot] = absent
+        self._prev_absent = absent
         if self.use_graph:
             if self._graph is None:
                 self._capture()

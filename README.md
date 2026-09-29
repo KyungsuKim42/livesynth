@@ -92,7 +92,10 @@ window has two timbre slots (preset, reference recording by drag and drop, or
 a text prompt with a choice of Procrustes alignment or none) and a morph
 slider between them. With *Keep playing when I
 stop*, the model continues the performance on its own once every key has been
-released for the chosen grace time; *Autonomous* lets it improvise.
+released for the chosen grace time; *Autonomous* lets it improvise. When you
+play again, the engine drops the model's own interlude from its attention
+window, so it follows your MIDI again from the next frame instead of carrying
+its improvisation on top of yours (`forget_on_resume`, on by default).
 
 On Apple Silicon the engine runs on MLX in bfloat16; on NVIDIA GPUs it runs in
 PyTorch with a CUDA graph (about 3 ms per 10-ms frame on an RTX 4090). Check
