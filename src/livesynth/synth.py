@@ -168,6 +168,19 @@ class LiveSynth:
                              f"(use embed_text() for text prompts)")
         raise TypeError(f"unsupported timbre type {type(t).__name__}")
 
+    # -- real-time --------------------------------------------------------------
+
+    def streaming_engine(self, timbre: TimbreLike | None = None, use_graph: bool = True,
+                         seed: int | None = None):
+        """Create a :class:`livesynth.stream.StreamingEngine` for frame-by-frame
+        synthesis (one 480-sample block per 10-ms frame)."""
+        from livesynth.stream import StreamingEngine
+        eng = StreamingEngine(self.backbone, self.decoder, self.device,
+                              precision=self.precision, use_graph=use_graph, seed=seed)
+        if timbre is not None:
+            eng.set_timbre(self.timbre(timbre))
+        return eng
+
     # -- low-level generation -------------------------------------------------
 
     def _autocast(self):

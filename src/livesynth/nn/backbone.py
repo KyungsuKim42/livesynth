@@ -140,6 +140,23 @@ class CausalAttention(nn.Module):
         return self.out(o.transpose(1, 2).reshape(b, 1, -1))
 
 
+    def step_ring(self, x: torch.Tensor, k_ring: torch.Tensor, v_ring: torch.Tensor,
+                  slot: torch.Tensor, bias: torch.Tensor, cos: torch.Tensor,
+                  sin: torch.Tensor) -> torch.Tensor:
+        """One frame with a fixed-size ring cache (for CUDA-graph capture).
+
+        ``k_ring``/``v_ring`` [B, H, W, Dh] are updated in place at ``slot``
+        (a 1-element long tensor); ``bias`` [W] is 0 for filled slots and -inf
+        for empty ones. Attention does not depend on key order (positions are
+        encoded by RoPE), so this equals :meth:`step`."""
+        b = x.shape[0]
+        q, k, v = self._qkv(x, cos, sin)
+        k_ring.index_copy_(2, slot, k.to(k_ring.dtype))
+        v_ring.index_copy_(2, slot, v.to(v_ring.dtype))
+        o = self._attend(q, k_ring, v_ring, bias.to(q.dtype).view(1, -1))
+        return self.out(o.transpose(1, 2).reshape(b, 1, -1))
+
+
 class SwiGLU(nn.Module):
     def __init__(self, d: int, hidden: int) -> None:
         super().__init__()
@@ -178,6 +195,12 @@ class Block(nn.Module):
     def step(self, x, cond, cache, cos, sin):
         s1, c1, g1, s2, c2, g2 = self._mods(cond)
         x = x + g1 * self.attn.step(self.norm1(x) * (1 + c1) + s1, cache, cos, sin)
+        return x + g2 * self.ffn(self.norm2(x) * (1 + c2) + s2)
+
+    def step_ring(self, x, cond, k_ring, v_ring, slot, bias, cos, sin):
+        s1, c1, g1, s2, c2, g2 = self._mods(cond)
+        x = x + g1 * self.attn.step_ring(self.norm1(x) * (1 + c1) + s1, k_ring, v_ring,
+                                         slot, bias, cos, sin)
         return x + g2 * self.ffn(self.norm2(x) * (1 + c2) + s2)
 
 

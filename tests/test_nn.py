@@ -116,3 +116,42 @@ def test_note_tracker_matches_offline():
     assert torch.equal(states, ref_state)
     sus = (ref_state >= 7)
     assert torch.equal(ages[sus], ref_age[sus])
+
+
+def _engine_pair(window: int = 8, max_pos: int = 65536):
+    from livesynth.stream import StreamingEngine
+    m = small_backbone(window=window)
+    dec = LatentDecoder(latent_dim=8, d_latent=16, dim=32, depth=2, n_fft=64, hop=16).eval()
+    with torch.no_grad():
+        for p in dec.parameters():
+            p.add_(0.05 * torch.randn_like(p))
+    eng = StreamingEngine(m, dec, torch.device("cpu"), precision="fp32", use_graph=False,
+                          max_pos=max_pos)
+    return m, dec, eng
+
+
+def test_streaming_engine_matches_offline():
+    m, dec, eng = _engine_pair()
+    noise, state, age, absent, timbre = random_inputs(1, 40, m.cfg)
+    g = torch.nn.functional.normalize(timbre[:, 0], dim=-1)   # the engine normalises timbre
+    with torch.no_grad():
+        ref = dec(m(noise, state, g, absent, age))[0]
+    eng.set_timbre(g[0])
+    out = torch.cat([eng.step_tensor(state[0, t], age[0, t], bool(absent[0, t]),
+                                     noise=noise[0, t]).reshape(-1).clone() for t in range(40)])
+    assert torch.allclose(out, ref, atol=1e-4), (out - ref).abs().max()
+
+
+def test_streaming_engine_rope_rebase():
+    torch.manual_seed(1)
+    m, dec, eng = _engine_pair(window=8, max_pos=64)          # re-bases every 32 frames
+    _, _, eng_long = _engine_pair(window=8, max_pos=4096)
+    eng_long.bb.load_state_dict(eng.bb.state_dict())
+    eng_long.dec.load_state_dict(eng.dec.state_dict())
+    eng_long.reset()
+    noise, state, age, absent, timbre = random_inputs(1, 120, m.cfg)
+    for e in (eng, eng_long):
+        e.set_timbre(timbre[0, 0])
+    a = [eng.step_tensor(state[0, t], age[0, t], False, noise=noise[0, t]).clone() for t in range(120)]
+    b = [eng_long.step_tensor(state[0, t], age[0, t], False, noise=noise[0, t]).clone() for t in range(120)]
+    assert torch.allclose(torch.cat(a, -1), torch.cat(b, -1), atol=1e-4)

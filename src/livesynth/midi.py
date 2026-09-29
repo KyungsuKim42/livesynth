@@ -14,14 +14,11 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
-import torch
 
-from livesynth.nn.midi_encoder import (
-    MAX_NOTE_AGE, N_VEL, OFFSET, ONSET_BASE, SUSTAIN_BASE, velocity_level,
+from livesynth.constants import (
+    FRAME_RATE, MAX_NOTE_AGE, N_PITCHES, N_VEL, OFFSET, ONSET_BASE, SUSTAIN_BASE,
+    velocity_level,
 )
-
-FRAME_RATE = 100
-N_PITCHES = 128
 
 MidiLike = Any   # str | Path | pretty_midi.PrettyMIDI | np.ndarray | Sequence[tuple]
 
@@ -98,7 +95,7 @@ def notes_end(notes: np.ndarray) -> float:
 
 
 def notes_to_frames(notes: np.ndarray, n_frames: int, frame_rate: int = FRAME_RATE
-                    ) -> tuple[torch.Tensor, torch.Tensor]:
+                    ) -> tuple["torch.Tensor", "torch.Tensor"]:
     """Note array -> ``state`` [N, 128] long and ``age`` [N, 128] long.
 
     Per pitch and frame the state is one of none / note-off / note-on (5
@@ -106,6 +103,7 @@ def notes_to_frames(notes: np.ndarray, n_frames: int, frame_rate: int = FRAME_RA
     frame the priority is note-on > note-off > sustain. ``age`` counts frames
     since the note-on of the note occupying that pitch (used for sustains only).
     """
+    import torch
     state = torch.zeros(n_frames, N_PITCHES, dtype=torch.long)
     age = torch.zeros(n_frames, N_PITCHES, dtype=torch.long)
     if len(notes) == 0 or n_frames == 0:
