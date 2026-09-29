@@ -12,13 +12,14 @@
   `NoteTracker`; released weights reproduce the research implementation
   bit-exactly in bf16.
 
-## Phase 2 — Weight distribution
+## Phase 2 — Weight distribution (done)
 
 * Private Hugging Face repository `KyungsuKim/LiveSynth` with
   `config.json`, `generator.safetensors` (Linear weights bf16, rest fp32),
   `decoder.safetensors`, `text_align.safetensors`, `presets.safetensors`.
 * Download on first use via `huggingface_hub.snapshot_download`; local override
-  with `LIVESYNTH_WEIGHTS`.
+  with `LIVESYNTH_WEIGHTS`. First load downloads about 400 MB; later loads
+  read the Hugging Face cache (about 5 s on a GPU server).
 
 ## Phase 3 — Real-time instrument (Python)
 

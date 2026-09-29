@@ -87,7 +87,7 @@ All outputs are mono `float32` arrays at 48 kHz.
 ## Roadmap
 
 - [x] Offline inference API (rendering, batching, morphing, continuation)
-- [ ] Automatic weight download from the Hugging Face Hub
+- [x] Automatic weight download from the Hugging Face Hub
 - [ ] Real-time GUI with MIDI controller and computer-keyboard input
 - [ ] VST3 / AU plug-in and standalone app
 
