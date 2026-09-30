@@ -8,9 +8,9 @@ performer controls is thread-safe and takes effect on the next frame:
 * notes (``note_on`` / ``note_off``), from MIDI or the computer keyboard;
 * two timbre slots A and B and a morph position between them — the engine's
   timbre is the spherical interpolation, smoothed over ~50 ms;
-* *keep playing*: when every key is released, the MIDI condition becomes absent
-  after a short grace period and the model continues the performance;
-* *autonomous*: the MIDI condition is always absent (the model improvises).
+* *autonomous*: the MIDI condition is always absent (the model improvises);
+* *keep playing* (off by default, not in the GUI): when every key is released,
+  the MIDI condition becomes absent after ``grace_s`` and the model continues.
 
 The engine is created inside its thread because MLX streams are thread-local.
 """
@@ -94,7 +94,7 @@ class SynthHost:
         self._slots: list[np.ndarray | None] = [None, None]
         self._morph_target = 0.0
         self._morph = 0.0
-        self.keep_playing = True
+        self.keep_playing = False
         self.autonomous = False
         self.grace_s = 1.0          # rests shorter than this never trigger autonomy
         self._idle_frames = 0

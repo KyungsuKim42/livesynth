@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 
 from livesynth.constants import LEAD_IN_FRAMES
-from livesynth.hub import DEFAULT_REPO, resolve_clap_checkpoint, resolve_model_dir
+from livesynth.hub import DEFAULT_REPO, resolve_clap_checkpoint, resolve_model_dir, resolve_reference
 from livesynth.midi import FRAME_RATE, MidiLike, load_notes, notes_end, notes_to_frames
 from livesynth.nn.backbone import BackboneConfig, LiveSynthBackbone
 from livesynth.nn.decoder import LatentDecoder
@@ -70,6 +70,7 @@ class LiveSynth:
         self._text_align = text_align
         self._cache_dir = cache_dir
         self._timbre_encoder: TimbreEncoder | None = None
+        self._source: tuple[Path, str, str | None] | None = None   # (model dir, repo, revision)
         if precision == "auto":
             precision = "bf16" if (device.type == "cuda" and torch.cuda.is_bf16_supported()) else "fp32"
         if precision not in ("bf16", "fp32"):
@@ -113,8 +114,10 @@ class LiveSynth:
         text_align = load_file(str(Path(d) / "text_align.safetensors"))
         for p in list(backbone.parameters()) + list(decoder.parameters()):
             p.requires_grad_(False)
-        return cls(backbone.to(dev), decoder.to(dev), cfg, presets, text_align, dev,
-                   precision=precision, cache_dir=cache_dir)
+        synth = cls(backbone.to(dev), decoder.to(dev), cfg, presets, text_align, dev,
+                    precision=precision, cache_dir=cache_dir)
+        synth._source = (Path(d), repo_id, revision)
+        return synth
 
     # -- properties -----------------------------------------------------------
 
@@ -132,8 +135,19 @@ class LiveSynth:
 
     @property
     def presets(self) -> list[str]:
-        """Names of the built-in timbre presets (held-out NSynth instruments)."""
+        """Names of the built-in timbre presets (held-out NSynth instruments).
+        Each preset is the embedding of one reference recording, see :meth:`preset_audio`."""
         return list(self._preset_names)
+
+    def preset_audio(self, name: str) -> Path:
+        """Path of the 10-s reference recording a preset was computed from
+        (downloaded on first use); ``embed_audio`` of it gives ``preset(name)``."""
+        if name not in self._preset_names:
+            raise KeyError(f"unknown preset {name!r}; see LiveSynth.presets")
+        if self._source is None:
+            raise RuntimeError("preset recordings are available for models loaded with from_pretrained")
+        d, repo, rev = self._source
+        return resolve_reference(name, d, repo, rev, self._cache_dir)
 
     # -- timbre ---------------------------------------------------------------
 
@@ -158,12 +172,12 @@ class LiveSynth:
         on its own works best."""
         return self._encoder().embed_audio(audio, sr=sr, crop=crop)
 
-    def embed_text(self, prompt: str, align: str = "procrustes") -> torch.Tensor:
+    def embed_text(self, prompt: str, align: str = "none") -> torch.Tensor:
         """Text prompt (e.g. ``"the sound of an acoustic string"``) -> timbre embedding [512].
 
-        ``align`` maps the CLAP text embedding toward the audio embeddings the
-        model was trained on: ``"procrustes"`` (default) or ``"none"`` (raw
-        CLAP text embedding). Text prompts reliably select the instrument family; the
+        ``align``: ``"none"`` (the raw CLAP text embedding, default) or
+        ``"procrustes"`` (an orthogonal rotation toward the audio embeddings the
+        model was trained on). Text prompts reliably select the instrument family; the
         finer timbre is better specified with a reference recording."""
         return self._encoder().embed_text(prompt, align=align)
 

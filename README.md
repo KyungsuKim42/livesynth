@@ -48,7 +48,7 @@ sf.write("cello_song.wav", audio, synth.sample_rate)
 # Text-to-instrument
 audio = synth.render("song.mid", synth.embed_text("the sound of an acoustic string"))
 
-# Built-in presets (held-out NSynth instruments)
+# Built-in presets (held-out NSynth instruments; each is one reference recording)
 print(synth.presets)
 audio = synth.render("song.mid", "keyboard_acoustic_004")
 ```
@@ -69,7 +69,8 @@ python quickstart.py song.mid [reference.wav]
 | `render_timbre_path(midi, path)` | Render with an arbitrary per-frame timbre path (`[N, 512]` tensor or a function of time). |
 | `continue_performance(midi, timbre, prefix, length)` | Play the MIDI up to `prefix` seconds, then continue autonomously for `length` seconds. With `midi=None` the model improvises. |
 | `embed_audio(path_or_array, sr)` | CLAP embedding of a reference recording (the loudest 10 s are used). |
-| `embed_text(prompt, align)` | CLAP text embedding mapped onto the audio region with an orthogonal Procrustes rotation (`align="procrustes"`, default) or left raw (`align="none"`). |
+| `embed_text(prompt, align)` | CLAP text embedding, raw by default (`align="none"`) or rotated toward the audio embeddings with an orthogonal Procrustes map (`align="procrustes"`). |
+| `preset_audio(name)` | The 10-s reference recording a preset was computed from (downloaded on first use). |
 | `generate(midi_state, midi_age, timbre, midi_absent)` | Low-level batched generation on frame-level conditions. |
 
 MIDI inputs can be a file path, a `pretty_midi.PrettyMIDI` object, or a note
@@ -89,13 +90,11 @@ Play with a MIDI keyboard (or the virtual port *LiveSynth In*) or with the
 computer keyboard: `A W S E D F T G Y H U J K` play one octave, `Z`/`X` shift
 the octave, `C`/`V` change the velocity, `Space` releases everything. The
 window has two timbre slots (preset, reference recording by drag and drop, or
-a text prompt with a choice of Procrustes alignment or none) and a morph
-slider between them. With *Keep playing when I
-stop*, the model continues the performance on its own once every key has been
-released for the chosen grace time; *Autonomous* lets it improvise. When you
-play again, the engine drops the model's own interlude from its attention
-window, so it follows your MIDI again from the next frame instead of carrying
-its improvisation on top of yours (`forget_on_resume`, on by default).
+a text prompt, optionally with Procrustes alignment) and a morph slider
+between them. *Autonomous* (experimental) lets the model improvise without
+MIDI; when you play again, the engine drops the improvisation from its
+attention window so it follows your MIDI from the next frame
+(`forget_on_resume`, on by default).
 
 On Apple Silicon the engine runs on MLX in bfloat16; on NVIDIA GPUs it runs in
 PyTorch with a CUDA graph (about 3 ms per 10-ms frame on an RTX 4090). Check

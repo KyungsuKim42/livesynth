@@ -20,7 +20,7 @@ from pathlib import Path
 from PyQt6.QtCore import QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QPainter, QPen
 from PyQt6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGridLayout,
+    QApplication, QCheckBox, QComboBox, QFileDialog, QFrame, QGridLayout,
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QProgressBar, QPushButton, QSlider,
     QVBoxLayout, QWidget,
 )
@@ -138,11 +138,11 @@ class TimbreSlot(QFrame):
         self.prompt.setPlaceholderText("or describe it: the sound of an acoustic string")
         self.prompt.returnPressed.connect(self._on_prompt)
         # How the CLAP text embedding is mapped onto the audio embeddings the
-        # model was trained on (the modality gap): an orthogonal Procrustes
-        # rotation, or the raw text embedding.
+        # model was trained on (the modality gap): the raw text embedding
+        # (default), or an orthogonal Procrustes rotation.
         self.align = QComboBox()
         self.align.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        for label, key in (("Procrustes", "procrustes"), ("No alignment", "none")):
+        for label, key in (("No alignment", "none"), ("Procrustes", "procrustes")):
             self.align.addItem(label, key)
         self.align.setToolTip("Text-to-audio alignment of the CLAP embedding")
         self.align.activated.connect(self._on_align)
@@ -242,17 +242,6 @@ class MainWindow(QMainWindow):
         perf = QFrame()
         perf.setObjectName("card")
         ph = QHBoxLayout(perf)
-        self.keep = QCheckBox("Keep playing when I stop")
-        self.keep.setChecked(True)
-        self.keep.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.keep.toggled.connect(lambda on: setattr(self.host, "keep_playing", on))
-        self.grace = QDoubleSpinBox()
-        self.grace.setRange(0.0, 5.0)
-        self.grace.setSingleStep(0.1)
-        self.grace.setValue(host.grace_s)
-        self.grace.setSuffix(" s")
-        self.grace.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
-        self.grace.valueChanged.connect(lambda x: setattr(self.host, "grace_s", x))
         self.auto = QCheckBox("Autonomous")
         self.auto.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.auto.toggled.connect(lambda on: setattr(self.host, "autonomous", on))
@@ -260,10 +249,6 @@ class MainWindow(QMainWindow):
         panic.setObjectName("panic")
         panic.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         panic.clicked.connect(self._panic)
-        ph.addWidget(self.keep)
-        ph.addWidget(QLabel("after"))
-        ph.addWidget(self.grace)
-        ph.addSpacing(16)
         ph.addWidget(self.auto)
         ph.addStretch(1)
         ph.addWidget(panic)
@@ -420,7 +405,7 @@ class MainWindow(QMainWindow):
         self.slots[slot].name.setText(f"embedding {Path(path).name}…")
         self._pending[self.embedder.submit_audio(slot, path, Path(path).stem)] = "audio"
 
-    def embed_text(self, slot: int, prompt: str, align: str = "procrustes") -> None:
+    def embed_text(self, slot: int, prompt: str, align: str = "none") -> None:
         self.slots[slot].name.setText(f'embedding "{prompt}"…')
         self._pending[self.embedder.submit_text(slot, prompt, align)] = "text"
 
@@ -448,7 +433,7 @@ class MainWindow(QMainWindow):
                 self.apply_embedding(r.slot, r.embedding, r.label, self._pending.pop(r.job_id, "audio"))
         st = self.host.stats()
         if st.frames:
-            mode = "continuing" if st.absent else "playing"
+            mode = "autonomous" if st.absent else "playing"
             self.status.setText(f"{st.backend} · {st.frame_ms_mean:.1f} ms/frame (p99 {st.frame_ms_p99:.1f}) · "
                                 f"underruns {st.underruns} · {mode}")
         if self.embedder.error:

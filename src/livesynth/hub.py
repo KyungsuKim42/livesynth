@@ -34,6 +34,19 @@ def resolve_model_dir(repo_id: str = DEFAULT_REPO, revision: str | None = None,
                                   allow_patterns=list(MODEL_FILES)))
 
 
+def resolve_reference(name: str, model_dir: str | os.PathLike, repo_id: str = DEFAULT_REPO,
+                      revision: str | None = None,
+                      cache_dir: str | os.PathLike | None = None) -> Path:
+    """Path of the reference recording ``references/<name>.flac`` behind a preset:
+    taken from ``model_dir`` when present, otherwise downloaded on first use."""
+    local = Path(model_dir) / "references" / f"{name}.flac"
+    if local.exists():
+        return local
+    from huggingface_hub import hf_hub_download
+    return Path(hf_hub_download(repo_id, f"references/{name}.flac", revision=revision,
+                                cache_dir=cache_dir))
+
+
 def resolve_clap_checkpoint(cache_dir: str | os.PathLike | None = None) -> str:
     local = os.environ.get("LIVESYNTH_CLAP")
     if local:

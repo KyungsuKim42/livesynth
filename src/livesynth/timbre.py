@@ -7,8 +7,8 @@ LiveSynth is conditioned on a 512-d LAION-CLAP embedding
   instrument cloning, or
 * a text prompt (:meth:`TimbreEncoder.embed_text`) — text-to-instrument. CLAP
   text and audio embeddings occupy different regions of the shared space (the
-  modality gap), so text embeddings are mapped onto the audio region first,
-  by default with an orthogonal Procrustes rotation fitted on NSynth.
+  modality gap). The raw text embedding is used by default; an orthogonal
+  Procrustes rotation fitted on NSynth can map it onto the audio region.
 
 CLAP consumes at most 10 s; longer references are cropped to the loudest 10-s
 window (the model was trained on 10-s references of the playing instrument).
@@ -101,11 +101,11 @@ class TimbreEncoder:
         return F.normalize(e.float(), dim=-1)[0]
 
     @torch.no_grad()
-    def embed_text(self, prompt: str, align: str = "procrustes") -> torch.Tensor:
-        """Text prompt -> unit-norm embedding [512] mapped toward the audio region.
+    def embed_text(self, prompt: str, align: str = "none") -> torch.Tensor:
+        """Text prompt -> unit-norm embedding [512].
 
-        ``align``: ``"procrustes"`` (orthogonal rotation fitted on NSynth
-        prompt/audio pairs, default) or ``"none"`` (the raw CLAP text embedding).
+        ``align``: ``"none"`` (the raw CLAP text embedding, default) or
+        ``"procrustes"`` (orthogonal rotation fitted on NSynth prompt/audio pairs).
         """
         e = self.clap.get_text_embedding([prompt], use_tensor=True).float()
         e = F.normalize(e, dim=-1)[0]

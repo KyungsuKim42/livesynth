@@ -61,3 +61,11 @@ def test_timbre_resolution(synth):
         synth.timbre("definitely not a preset or file")
     with pytest.raises(ValueError):
         synth.timbre(torch.zeros(7))
+
+
+def test_preset_is_embedding_of_its_reference(synth):
+    name = synth.presets[3]
+    path = synth.preset_audio(name)
+    assert path.suffix == ".flac"
+    e = synth.embed_audio(str(path)).to(synth.device)
+    assert float(e @ synth.preset(name)) > 0.999

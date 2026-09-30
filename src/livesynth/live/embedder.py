@@ -73,11 +73,11 @@ class EmbedderProcess:
         self._jobs.put((i, slot, "audio", path, label, None))
         return i
 
-    def submit_text(self, slot: int, prompt: str, align: str = "procrustes") -> int:
-        """``align``: ``"procrustes"`` or ``"none"``
+    def submit_text(self, slot: int, prompt: str, align: str = "none") -> int:
+        """``align``: ``"none"`` or ``"procrustes"``
         (see :meth:`livesynth.timbre.TimbreEncoder.embed_text`)."""
         i = next(self._ids)
-        suffix = "" if align == "procrustes" else f" [{align}]"
+        suffix = "" if align == "none" else f" [{align}]"
         self._jobs.put((i, slot, "text", prompt, f'"{prompt}"{suffix}', align))
         return i
 
