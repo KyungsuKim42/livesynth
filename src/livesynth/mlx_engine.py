@@ -26,7 +26,7 @@ import mlx.core as mx
 import numpy as np
 
 from livesynth.constants import (
-    AGE_MAX_PERIOD, AGE_MIN_PERIOD, AGE_ROT_DIM, MAX_NOTE_AGE, N_VEL, SUSTAIN_BASE,
+    AGE_MAX_PERIOD, AGE_MIN_PERIOD, AGE_ROT_DIM, LEAD_IN_FRAMES, MAX_NOTE_AGE, N_VEL, SUSTAIN_BASE,
 )
 
 
@@ -205,6 +205,7 @@ class MLXStreamingEngine:
         self._slot_absent = np.zeros(self.window, bool)
         self._prev_absent = False
         self._frame = 0
+        self._lead_pending = True          # silent lead-in frames run before the next real frame
         if seed is not None:
             self._rng = np.random.default_rng(seed)
         z = mx.zeros((1, 1, self.d_latent), dtype=dt)
@@ -295,6 +296,15 @@ class MLXStreamingEngine:
              noise: np.ndarray | None = None) -> np.ndarray:
         """One frame. ``state``/``age`` [128] (from :class:`livesynth.NoteTracker`).
         Returns ``float32`` audio [480]."""
+        if self._lead_pending:             # same silent frames as offline rendering, audio dropped
+            self._lead_pending = False
+            none = np.zeros(128, np.int64)
+            for _ in range(LEAD_IN_FRAMES):
+                self._advance(none, none, False, np.zeros(self.noise_dim, np.float32))
+        return self._advance(state, age, absent, noise)
+
+    def _advance(self, state: np.ndarray, age: np.ndarray, absent: bool,
+                 noise: np.ndarray | None) -> np.ndarray:
         if self._frame >= self._rebase_at:
             dlt = self._rebase_by
             c, s = self.rope_cos[dlt:dlt + 1], -self.rope_sin[dlt:dlt + 1]

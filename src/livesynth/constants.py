@@ -16,6 +16,11 @@ AGE_MAX_PERIOD = 5120.0            # frames (51.2 s)
 FRAME_RATE = 100
 N_PITCHES = 128
 
+# The decoder emits a fixed ~27-ms transient when it starts from an empty
+# context. Every path therefore generates this many silent frames (no notes,
+# zero noise) before the first real frame and drops their audio.
+LEAD_IN_FRAMES = 3
+
 
 def velocity_level(velocity: float) -> int:
     """MIDI velocity (1..127) -> nearest quantisation level index 0..4."""

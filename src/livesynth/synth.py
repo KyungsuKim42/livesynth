@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+from livesynth.constants import LEAD_IN_FRAMES
 from livesynth.hub import DEFAULT_REPO, resolve_clap_checkpoint, resolve_model_dir
 from livesynth.midi import FRAME_RATE, MidiLike, load_notes, notes_end, notes_to_frames
 from livesynth.nn.backbone import BackboneConfig, LiveSynthBackbone
@@ -27,6 +28,21 @@ def _auto_device() -> torch.device:
     if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
         return torch.device("mps")
     return torch.device("cpu")
+
+
+def lead_in(state: torch.Tensor, age: torch.Tensor, noise: torch.Tensor, timbre: torch.Tensor,
+            absent: torch.Tensor | None, n: int = LEAD_IN_FRAMES):
+    """Prepend ``n`` silent frames (no notes, zero noise, first frame's timbre) to
+    frame-level conditions [B, N, ...]; the caller drops their ``n * hop`` samples.
+    The streaming engines run the same frames after every reset."""
+    state = F.pad(state, (0, 0, n, 0))
+    age = F.pad(age, (0, 0, n, 0))
+    noise = F.pad(noise, (0, 0, n, 0))
+    if timbre.dim() == 3:
+        timbre = torch.cat([timbre[:, :1].expand(-1, n, -1), timbre], 1)
+    if absent is not None:
+        absent = torch.cat([absent.new_zeros(absent.shape[0], n), absent], 1)
+    return state, age, noise, timbre, absent
 
 
 class LiveSynth:
@@ -214,12 +230,12 @@ class LiveSynth:
         b, n = midi_state.shape[:2]
         if noise is None:
             noise = torch.stack([self._noise(n, None if seed is None else seed + i) for i in range(b)])
+        state, age, noise, timbre, absent = lead_in(midi_state.to(self.device), midi_age.to(self.device),
+                                                    noise.to(self.device), timbre.to(self.device),
+                                                    None if midi_absent is None else midi_absent.to(self.device))
         with self._autocast():
-            z = self.backbone(noise.to(self.device), midi_state.to(self.device),
-                              timbre.to(self.device),
-                              midi_absent=None if midi_absent is None else midi_absent.to(self.device),
-                              midi_age=midi_age.to(self.device))
-        return self.decoder(z.float())
+            z = self.backbone(noise, state, timbre, midi_absent=absent, midi_age=age)
+        return self.decoder(z.float())[:, LEAD_IN_FRAMES * self.hop_length:]
 
     def _frames_for(self, notes: np.ndarray, duration: float | None, tail: float) -> int:
         seconds = duration if duration is not None else notes_end(notes) + tail

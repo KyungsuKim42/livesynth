@@ -134,8 +134,11 @@ def test_streaming_engine_matches_offline():
     m, dec, eng = _engine_pair()
     noise, state, age, absent, timbre = random_inputs(1, 40, m.cfg)
     g = torch.nn.functional.normalize(timbre[:, 0], dim=-1)   # the engine normalises timbre
+    from livesynth.constants import LEAD_IN_FRAMES
+    from livesynth.synth import lead_in
+    st, ag, nz, tb, ab = lead_in(state, age, noise, g, absent)
     with torch.no_grad():
-        ref = dec(m(noise, state, g, absent, age))[0]
+        ref = dec(m(nz, st, tb, ab, ag))[0, LEAD_IN_FRAMES * dec.hop:]
     eng.forget_on_resume = False           # the offline pass keeps every frame in context
     eng.set_timbre(g[0])
     out = torch.cat([eng.step_tensor(state[0, t], age[0, t], bool(absent[0, t]),

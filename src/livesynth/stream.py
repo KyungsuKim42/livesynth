@@ -33,6 +33,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from livesynth.constants import LEAD_IN_FRAMES
 from livesynth.nn.backbone import LiveSynthBackbone, rotary_tables
 from livesynth.nn.decoder import LatentDecoder
 
@@ -140,6 +141,7 @@ class StreamingEngine:
             c.zero_()
         self.ola.zero_()
         self._frame = 0
+        self._lead_pending = True          # silent lead-in frames run before the next real frame
         if seed is not None:
             self._gen.manual_seed(int(seed))
         # Overlap-add warm-up: decode the same zero-latent frames the offline
@@ -226,6 +228,16 @@ class StreamingEngine:
                     noise: torch.Tensor | None = None) -> torch.Tensor:
         """One frame from device tensors ``state``/``age`` [128]. Returns audio [1, 480]
         on the device (valid until the next call)."""
+        if self._lead_pending:             # same silent frames as offline rendering, audio dropped
+            self._lead_pending = False
+            none = torch.zeros(128, dtype=torch.long, device=self.device)
+            quiet = torch.zeros(self.noise_dim, device=self.device)
+            for _ in range(LEAD_IN_FRAMES):
+                self._advance(none, none, False, quiet)
+        return self._advance(state, age, absent, noise)
+
+    def _advance(self, state: torch.Tensor, age: torch.Tensor, absent: bool,
+                 noise: torch.Tensor | None) -> torch.Tensor:
         if self._frame >= self._rebase_at:
             self._rebase()
         pos = self._frame
