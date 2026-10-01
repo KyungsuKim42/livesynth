@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "livesynth"
 version = "0.1.0"
 description = "LiveSynth: a real-time streaming neural instrument with zero-shot instrument cloning and text-to-instrument"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Kyungsu Kim" }, { name = "Yejin Kim" }, { name = "Kyogu Lee" },
 ]
@@ -15,17 +16,19 @@ requires-python = ">=3.10,<3.13"   # laion_clap needs numpy<2 (no wheels for 3.1
 dependencies = [
     "torch>=2.1",
     "torchvision",          # imported by laion_clap but not declared by it
-    "numpy>=1.24",
+    "numpy>=1.24,<2",       # laion_clap is not numpy-2 ready
     "scipy>=1.10",
     "soundfile>=0.12",
     "pretty_midi>=0.2.10",
     "safetensors>=0.4",
     "huggingface_hub>=0.23",
-    "laion_clap>=1.1.4",
+    "laion_clap>=1.1.7",    # older releases pin or omit numpy inconsistently
+    "transformers>=4.30",   # keeps resolvers from falling back to ancient releases
 ]
 
 [project.optional-dependencies]
-live = ["sounddevice>=0.4.6", "mido>=1.3", "python-rtmidi>=1.5", "PyQt6>=6.5"]
+live = ["sounddevice>=0.4.6", "mido>=1.3", "python-rtmidi>=1.5", "PyQt6>=6.5",
+        "mlx>=0.18; sys_platform == 'darwin' and platform_machine == 'arm64'"]   # MLX engine on Apple Silicon
 mlx = ["mlx>=0.18"]
 dev = ["pytest>=7"]
 

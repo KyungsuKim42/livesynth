@@ -1,4 +1,4 @@
-"""LiveSynth quickstart: render, morph and continue a MIDI performance.
+"""LiveSynth quickstart: clone a timbre, describe one in text, render in batch and morph.
 
     python quickstart.py path/to/song.mid [path/to/reference.wav]
 
@@ -40,14 +40,10 @@ def main() -> None:
     for name, a in zip(names, synth.render_batch([midi] * len(names), names, seed=0)):
         sf.write(out / f"batch_{name}.wav", a, synth.sample_rate)
 
-    # 4. Timbre morphing: from the reference to strings between 2 s and 8 s.
-    morph = synth.morph(midi, timbre, strings, start=2.0, end=8.0, seed=0)
+    # 4. Timbre morphing: from the piano preset to a plucked-string preset
+    #    between 3 s and 13 s, updated every 10-ms frame.
+    morph = synth.morph(midi, "keyboard_acoustic_004", "string_acoustic_056", start=3.0, end=13.0, seed=0)
     sf.write(out / "morph.wav", morph, synth.sample_rate)
-
-    # 5. Performance continuation: play the first 5 s, then let the model
-    #    continue on its own for 5 s.
-    cont = synth.continue_performance(midi, timbre, prefix=5.0, length=5.0, seed=0)
-    sf.write(out / "continuation.wav", cont, synth.sample_rate)
 
     print(f"wrote {sorted(p.name for p in out.glob('*.wav'))} to {out}/")
 

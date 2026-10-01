@@ -1,38 +1,46 @@
+<div align="center">
+
 # LiveSynth
 
-**A streaming neural synthesizer for instrument cloning and text-to-instrument.**
+**A streaming neural synthesizer for instrument cloning and text-to-instrument**
 
-LiveSynth turns MIDI into 48-kHz audio in the timbre of any instrument, given
-either a short reference recording or a text prompt. It generates one 10-ms
-frame at a time with no lookahead, so the same model that renders offline also
-runs as a playable real-time instrument. Because the timbre condition can
-change every frame and the MIDI condition can be withdrawn, the model also
-morphs smoothly between instruments and keeps playing on its own when the
-performer stops.
+Kyungsu Kim, Yejin Kim, Kyogu Lee<br>
+Music and Audio Research Group, Seoul National University
 
-> Kyungsu Kim, Yejin Kim, Kyogu Lee (Seoul National University).
-> *LiveSynth: A Streaming Neural Synthesizer for Instrument Cloning and Text-to-Instrument.*
+[![Demo](https://img.shields.io/badge/Demo-audio_examples-295da8)](https://kyungsukim42.github.io/livesynth-demo/)
+[![Model](https://img.shields.io/badge/Hugging_Face-weights-b95e55)](https://huggingface.co/KyungsuKim/LiveSynth)
+[![Python](https://img.shields.io/badge/Python-3.10–3.12-626975)](#installation)
+
+</div>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero_dark.png">
+  <img alt="A 16-second performance rendered by LiveSynth. The timbre moves from a piano recording to a plucked-string recording between 3 s and 13 s while the MIDI keeps playing; the spectrogram shows the attacks changing." src="docs/assets/hero_light.png" width="100%">
+</picture>
+
+<p align="center"><sub>One streamed performance. The timbre moves from a piano recording to a plucked-string recording
+between 3&nbsp;s and 13&nbsp;s while the MIDI keeps playing. <a href="docs/assets/hero.mp4">Listen to this performance</a><br>
+MIDI excerpt from the Lakh MIDI Dataset; reference recordings from NSynth.</sub></p>
+
+LiveSynth turns MIDI into 48-kHz audio in the timbre of any instrument, given a
+short reference recording or a text prompt. It generates one frame at a time
+with no lookahead, so the same model renders files offline and plays live from
+a MIDI keyboard, and its timbre can change on every frame.
 
 ## Installation
 
 ```bash
-pip install git+https://github.com/KyungsuKim42/livesynth.git
+pip install livesynth
 ```
 
-Python 3.10, 3.11 or 3.12 is required (the CLAP timbre encoder depends on
-NumPy 1.x, which has no Python 3.13 builds), together with PyTorch 2.1 or newer.
-On macOS, for example:
+> [!NOTE]
+> LiveSynth needs Python 3.10, 3.11 or 3.12. On Linux with an NVIDIA GPU, first
+> install the [PyTorch build](https://pytorch.org/get-started/locally/) that
+> matches your driver; the default build on PyPI needs a recent driver. The model
+> weights (about 400 MB) and the CLAP timbre encoder are downloaded from the
+> Hugging Face Hub the first time the model is loaded.
 
-```bash
-brew install python@3.12            # or: conda create -n livesynth python=3.12
-python3.12 -m venv .venv && source .venv/bin/activate
-```
- A CUDA GPU is
-recommended for fast offline rendering; Apple Silicon (MPS) and CPU also work.
-The model weights (about 400 MB) and the CLAP timbre encoder are downloaded
-from the Hugging Face Hub the first time the model is loaded.
-
-## Quickstart
+## Quick start
 
 ```python
 import soundfile as sf
@@ -40,101 +48,98 @@ from livesynth import LiveSynth
 
 synth = LiveSynth.from_pretrained()
 
-# Zero-shot instrument cloning from a reference recording
-timbre = synth.embed_audio("cello.wav")
+timbre = synth.embed_audio("cello.wav")      # any recording of the instrument
 audio = synth.render("song.mid", timbre)
-sf.write("cello_song.wav", audio, synth.sample_rate)
+sf.write("song_cello.wav", audio, synth.sample_rate)
+```
 
-# Text-to-instrument
+`python quickstart.py song.mid [reference.wav]` writes one example of each
+feature below.
+
+## What you can do
+
+**Clone an instrument from a recording.** LiveSynth listens to the loudest
+10 s of the recording. Fifty-three built-in presets are ready to use; each is
+the embedding of a 10-s clip of an NSynth instrument held out from training.
+
+```python
+audio = synth.render("song.mid", synth.embed_audio("my_synth.wav"))
+audio = synth.render("song.mid", "keyboard_acoustic_004")    # a preset
+synth.preset_audio("keyboard_acoustic_004")                  # the recording behind it
+```
+
+**Describe an instrument in words.**
+
+```python
 audio = synth.render("song.mid", synth.embed_text("the sound of an acoustic string"))
-
-# Built-in presets (held-out NSynth instruments; each is one reference recording)
-print(synth.presets)
-audio = synth.render("song.mid", "keyboard_acoustic_004")
 ```
 
-Or run the bundled script, which writes one example of every feature:
+**Morph between instruments.** The timbre follows a spherical path between two
+embeddings and is updated every frame. The figure above was made with this call:
 
-```bash
-python quickstart.py song.mid [reference.wav]
+```python
+audio = synth.morph("song.mid", "keyboard_acoustic_004", "string_acoustic_056",
+                    start=3.0, end=13.0)
 ```
 
-## Features
+**Render in batches.**
 
-| Method | What it does |
-|---|---|
-| `render(midi, timbre)` | Render a MIDI performance in one timbre. |
-| `render_batch(midis, timbres)` | Render many items in mini-batches (item `i` uses seed `seed + i`). |
-| `morph(midi, timbre_a, timbre_b, start, end)` | Move from one timbre to another along the spherical path, updated every frame. |
-| `render_timbre_path(midi, path)` | Render with an arbitrary per-frame timbre path (`[N, 512]` tensor or a function of time). |
-| `continue_performance(midi, timbre, prefix, length)` | Play the MIDI up to `prefix` seconds, then continue autonomously for `length` seconds. With `midi=None` the model improvises. |
-| `embed_audio(path_or_array, sr)` | CLAP embedding of a reference recording (the loudest 10 s are used). |
-| `embed_text(prompt, align)` | CLAP text embedding, raw by default (`align="none"`) or rotated toward the audio embeddings with an orthogonal Procrustes map (`align="procrustes"`). |
-| `preset_audio(name)` | The 10-s reference recording a preset was computed from (downloaded on first use). |
-| `generate(midi_state, midi_age, timbre, midi_absent)` | Low-level batched generation on frame-level conditions. |
+```python
+audios = synth.render_batch(["a.mid", "b.mid"],
+                            ["brass_acoustic_059", "organ_electronic_057"])
+```
 
-MIDI inputs can be a file path, a `pretty_midi.PrettyMIDI` object, or a note
-array of shape `[K, 4]` with rows `(start_s, end_s, pitch, velocity)`. Timbre
-inputs can be an embedding, a preset name, or the path of a reference recording.
-All outputs are mono `float32` arrays at 48 kHz.
+The full Python API, including per-frame timbre paths and the streaming engine,
+is described in [docs/api.md](docs/api.md).
 
-## Real-time instrument
+## Play it live
 
 ```bash
-pip install "livesynth[live,mlx] @ git+https://github.com/KyungsuKim42/livesynth.git"   # Apple Silicon
-pip install "livesynth[live] @ git+https://github.com/KyungsuKim42/livesynth.git"       # CUDA GPU
+pip install "livesynth[live]"
 livesynth-live
 ```
 
-Play with a MIDI keyboard (or the virtual port *LiveSynth In*) or with the
-computer keyboard: `A W S E D F T G Y H U J K` play one octave, `Z`/`X` shift
-the octave, `C`/`V` change the velocity, `Space` releases everything. The
-window has two timbre slots (preset, reference recording by drag and drop, or
-a text prompt, optionally with Procrustes alignment) and a morph slider
-between them. *Autonomous* (experimental) lets the model improvise without
-MIDI; when you play again, the engine drops the improvisation from its
-attention window so it follows your MIDI from the next frame
-(`forget_on_resume`, on by default).
+The window has two timbre slots and a morph slider between them. Each slot
+takes a preset, a recording dropped onto it, or a text prompt. Play from any
+MIDI controller (or the virtual port *LiveSynth In*) or from the computer
+keyboard: `A W S E D F T G Y H U J K` play one octave, `Z`/`X` shift the
+octave, `C`/`V` change the velocity and `Space` releases every note. The
+engine runs on MLX on Apple Silicon (installed automatically there) and on
+PyTorch with a CUDA graph on NVIDIA GPUs.
 
-On Apple Silicon the engine runs on MLX in bfloat16; on NVIDIA GPUs it runs in
-PyTorch with a CUDA graph (about 3 ms per 10-ms frame on an RTX 4090). Check
-your machine with
-
-```bash
-python -m livesynth.live.bench              # mean must stay well below 10 ms
-python -m livesynth.live.bench --quant 8    # MLX weight-only int8, if bf16 is too slow
-```
-
-For your own real-time code, `synth.streaming_engine()` (PyTorch) and
-`livesynth.mlx_engine.MLXStreamingEngine` (MLX) expose the same
-`step(state, age, absent) -> 480 samples` interface; feed them from
-`livesynth.NoteTracker`.
+<!-- TODO: screenshot of the live window (light and dark) -->
 
 ## How it works
 
-* **Causal VAE codec.** Audio is represented as 128-dimensional continuous
-  latents at 100 Hz (48 kHz, 480-sample hop). Only the lightweight causal
-  decoder (8 M parameters) is needed for synthesis.
+* **Causal VAE codec.** Audio is represented by 128-dimensional continuous
+  latents at 100 frames per second. Only its small causal decoder is needed
+  for synthesis.
 * **Feedback-free generator.** A 190 M-parameter causal Transformer maps
   per-frame Gaussian noise, MIDI and timbre to latents. It never reads its own
-  previous output, so it runs as one parallel pass offline or frame by frame
-  with a bounded 5-s key/value cache in real time; both paths compute exactly
-  the same function.
-* **Conditioning.** MIDI enters once at the input as a per-pitch state
-  embedding with note velocity and note age; timbre (a LAION-CLAP embedding)
-  modulates every block through adaLN-Zero and may differ per frame. A learned
-  *absent* MIDI embedding lets the model continue without MIDI.
+  output, so it runs as one parallel pass offline or frame by frame with a
+  bounded key/value cache in real time, and both paths compute the same
+  function.
+* **Conditioning.** MIDI enters once at the input as a per-pitch state with
+  note velocity and note age. The timbre, a LAION-CLAP embedding, modulates
+  every block through adaLN-Zero and may differ from frame to frame.
 
 ## Roadmap
 
-- [x] Offline inference API (rendering, batching, morphing, continuation)
+- [x] Offline inference API (rendering, batching, morphing)
 - [x] Automatic weight download from the Hugging Face Hub
-- [x] Real-time GUI with MIDI controller and computer-keyboard input (testing on macOS)
+- [x] Real-time GUI with MIDI controller and computer-keyboard input
 - [ ] VST3 / AU plug-in and standalone app
-
-See [docs/ROADMAP.md](docs/ROADMAP.md) for details.
 
 ## License
 
-The code is released under the MIT License. The license of the model weights
-will be announced with the public release.
+LiveSynth is released under the [MIT License](LICENSE), both the code and the
+model weights.
+
+## Acknowledgements
+
+Reference recordings and presets come from the
+[NSynth dataset](https://magenta.tensorflow.org/datasets/nsynth) (CC BY 4.0),
+and the MIDI excerpt in the figure from the
+[Lakh MIDI Dataset](https://colinraffel.com/projects/lmd/) (CC BY 4.0).
+LiveSynth uses [LAION-CLAP](https://github.com/LAION-AI/CLAP) for timbre
+embeddings and a [Vocos](https://github.com/gemelo-ai/vocos)-style decoder.
