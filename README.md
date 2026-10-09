@@ -32,8 +32,8 @@ pip install livesynth
 
 > [!NOTE]
 > LiveSynth needs Python 3.10, 3.11 or 3.12. On Linux with an NVIDIA GPU, first
-> install the [PyTorch build](https://pytorch.org/get-started/locally/) that
-> matches your driver; the default build on PyPI needs a recent driver. The model
+> install `torch` and `torchvision` from the [PyTorch build](https://pytorch.org/get-started/locally/)
+> that matches your driver; the default build on PyPI needs a recent driver. The model
 > weights (about 400 MB) and the CLAP timbre encoder are downloaded from the
 > Hugging Face Hub the first time the model is loaded.
 
