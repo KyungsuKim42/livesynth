@@ -13,13 +13,10 @@ Music and Audio Research Group, Seoul National University
 
 </div>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero_dark.png">
-  <img alt="A 16-second performance rendered by LiveSynth. The timbre moves from a piano recording to a plucked-string recording between 3 s and 13 s while the MIDI keeps playing; the spectrogram shows the attacks changing." src="docs/assets/hero_light.png" width="100%">
-</picture>
+https://github.com/user-attachments/assets/9ae6969b-d41b-41c5-bc15-24be4c2f233a
 
 <p align="center"><sub>One streamed performance. The timbre moves from a piano recording to a plucked-string recording
-between 3&nbsp;s and 13&nbsp;s while the MIDI keeps playing. <a href="docs/assets/hero.mp4">Listen to this performance</a><br>
+between 3&nbsp;s and 13&nbsp;s while the MIDI keeps playing.<br>
 MIDI excerpt from the Lakh MIDI Dataset; reference recordings from NSynth.</sub></p>
 
 LiveSynth turns MIDI into 48-kHz audio in the timbre of any instrument, given a
@@ -75,7 +72,7 @@ audio = synth.render("song.mid", synth.embed_text("the sound of an acoustic stri
 ```
 
 **Morph between instruments.** The timbre follows a spherical path between two
-embeddings and is updated every frame. The figure above was made with this call:
+embeddings and is updated every frame. The performance above was made with this call:
 
 ```python
 audio = synth.morph("song.mid", "keyboard_acoustic_004", "string_acoustic_056",
